@@ -1,0 +1,6 @@
+@Graduation_Proj_Kinectcare_HostAddress = http://localhost:5208
+
+GET {{Graduation_Proj_Kinectcare_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
