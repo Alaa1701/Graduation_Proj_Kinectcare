@@ -13,13 +13,16 @@ public class AuthService : IAuthService
     private readonly AppDbContext _db;
     private readonly JwtHelper _jwt;
     private readonly ILogger<AuthService> _logger;
+    private readonly IEmailService _emailService; 
+
 
     public AuthService(AppDbContext db, JwtHelper jwt,
-        ILogger<AuthService> logger)
+        ILogger<AuthService> logger, IEmailService emailService)
     {
         _db = db;
         _jwt = jwt;
         _logger = logger;
+        _emailService = emailService;
     }
 
     // ── Login ─────────────────────────────────────────────
@@ -51,9 +54,9 @@ public class AuthService : IAuthService
         }, "تم تسجيل الدخول بنجاح");
     }
 
-    // ── Forgot Password ───────────────────────────────────
+
     public async Task<ApiResponse<string>> ForgotPasswordAsync(
-        ForgotPasswordDto dto)
+       ForgotPasswordDto dto)
     {
         var user = await _db.Users.FirstOrDefaultAsync(u =>
             u.Email.ToLower() == dto.EmailOrPhone.ToLower() ||
@@ -63,7 +66,7 @@ public class AuthService : IAuthService
             return ApiResponse<string>.Fail(
                 "لا يوجد حساب مرتبط بهذا البريد أو رقم الهاتف");
 
-        // احذف أي OTP قديم لنفس المستخدم
+        // احذف أي OTP قديم
         var oldOtps = _db.OtpTokens.Where(o =>
             o.EmailOrPhone == dto.EmailOrPhone && !o.IsUsed);
         _db.OtpTokens.RemoveRange(oldOtps);
@@ -81,17 +84,48 @@ public class AuthService : IAuthService
         _db.OtpTokens.Add(otp);
         await _db.SaveChangesAsync();
 
-        // TODO: إرسال OTP عبر Email/SMS
-        // سنضيف EmailService لاحقاً
-        _logger.LogInformation(
-            "OTP for {Contact}: {Code}", dto.EmailOrPhone, code);
+        // ✅ إرسال حقيقي الآن
+        // تحديد البريد الإلكتروني
+        var isEmail = dto.EmailOrPhone.Contains('@');
+
+        if (isEmail)
+        {
+            // إرسال عبر Email
+            try
+            {
+                await _emailService.SendOtpEmailAsync(
+                    dto.EmailOrPhone, code);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Failed to send OTP email");
+                return ApiResponse<string>.Fail(
+                    "فشل في إرسال البريد الإلكتروني، " +
+                    "تحقق من صحة البريد وحاول مرة أخرى");
+            }
+        }
+        else
+        {
+            // رقم هاتف — للتطوير: نسجّل الكود في الـ Log
+            // في الإنتاج: أضف Twilio هنا
+            _logger.LogWarning(
+                "SMS not configured. OTP for {Phone}: {Code}",
+                dto.EmailOrPhone, code);
+
+            // ✅ مؤقتاً: أرجع الكود في الرسالة للتطوير
+            return ApiResponse<string>.Ok(
+                dto.EmailOrPhone,
+                $"[DEV] رمز التحقق هو: {code} " +
+                "(SMS غير مفعّل — للتطوير فقط)");
+        }
 
         return ApiResponse<string>.Ok(
-            "تم إرسال رمز التحقق بنجاح",
-            "تم إرسال رمز التحقق إلى بريدك الإلكتروني أو هاتفك");
+            dto.EmailOrPhone,
+            "تم إرسال رمز التحقق إلى بريدك الإلكتروني");
     }
 
-    // ── Verify OTP ────────────────────────────────────────
+    // باقي الدوال بدون تغيير...
     public async Task<ApiResponse<string>> VerifyOtpAsync(
         VerifyOtpDto dto)
     {
@@ -109,10 +143,9 @@ public class AuthService : IAuthService
 
         return ApiResponse<string>.Ok(
             "تم التحقق بنجاح",
-            "رمز التحقق صحيح، يمكنك الآن تعيين كلمة مرور جديدة");
+            "رمز التحقق صحيح");
     }
 
-    // ── Reset Password ────────────────────────────────────
     public async Task<ApiResponse<string>> ResetPasswordAsync(
         ResetPasswordDto dto)
     {
@@ -137,24 +170,20 @@ public class AuthService : IAuthService
             u.PhoneNumber == dto.EmailOrPhone);
 
         if (user == null)
-            return ApiResponse<string>.Fail("المستخدم غير موجود");
+            return ApiResponse<string>.Fail(
+                "المستخدم غير موجود");
 
-        // تحديث كلمة المرور
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(
             dto.NewPassword);
         user.UpdatedAt = DateTime.UtcNow;
-
-        // تعليم الـ OTP كمستخدم
         otp.IsUsed = true;
 
         await _db.SaveChangesAsync();
 
         return ApiResponse<string>.Ok(
-            "تم تغيير كلمة المرور بنجاح",
-            "يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة");
+            "تم تغيير كلمة المرور بنجاح");
     }
 
-    // ── Change Password (للمستخدم المسجّل دخوله) ──────────
     public async Task<ApiResponse<string>> ChangePasswordAsync(
         int userId, ChangePasswordDto dto)
     {
@@ -164,7 +193,8 @@ public class AuthService : IAuthService
 
         var user = await _db.Users.FindAsync(userId);
         if (user == null)
-            return ApiResponse<string>.Fail("المستخدم غير موجود");
+            return ApiResponse<string>.Fail(
+                "المستخدم غير موجود");
 
         if (!BCrypt.Net.BCrypt.Verify(
             dto.CurrentPassword, user.PasswordHash))
@@ -181,3 +211,136 @@ public class AuthService : IAuthService
             "تم تغيير كلمة المرور بنجاح");
     }
 }
+
+// ── Forgot Password ───────────────────────────────────
+//    public async Task<ApiResponse<string>> ForgotPasswordAsync(
+//        ForgotPasswordDto dto)
+//    {
+//        var user = await _db.Users.FirstOrDefaultAsync(u =>
+//            u.Email.ToLower() == dto.EmailOrPhone.ToLower() ||
+//            u.PhoneNumber == dto.EmailOrPhone);
+
+//        if (user == null)
+//            return ApiResponse<string>.Fail(
+//                "لا يوجد حساب مرتبط بهذا البريد أو رقم الهاتف");
+
+//        // احذف أي OTP قديم لنفس المستخدم
+//        var oldOtps = _db.OtpTokens.Where(o =>
+//            o.EmailOrPhone == dto.EmailOrPhone && !o.IsUsed);
+//        _db.OtpTokens.RemoveRange(oldOtps);
+
+//        // أنشئ OTP جديد
+//        var code = new Random().Next(100000, 999999).ToString();
+//        var otp = new OtpToken
+//        {
+//            EmailOrPhone = dto.EmailOrPhone,
+//            Code = code,
+//            ExpiresAt = DateTime.UtcNow.AddMinutes(10),
+//            CreatedAt = DateTime.UtcNow
+//        };
+
+//        _db.OtpTokens.Add(otp);
+//        await _db.SaveChangesAsync();
+
+//        // TODO: إرسال OTP عبر Email/SMS
+//        // سنضيف EmailService لاحقاً
+//        _logger.LogInformation(
+//            "OTP for {Contact}: {Code}", dto.EmailOrPhone, code);
+
+//        return ApiResponse<string>.Ok(
+//            "تم إرسال رمز التحقق بنجاح",
+//            "تم إرسال رمز التحقق إلى بريدك الإلكتروني أو هاتفك");
+//    }
+
+//    // ── Verify OTP ────────────────────────────────────────
+//    public async Task<ApiResponse<string>> VerifyOtpAsync(
+//        VerifyOtpDto dto)
+//    {
+//        var otp = await _db.OtpTokens
+//            .Where(o =>
+//                o.EmailOrPhone == dto.EmailOrPhone &&
+//                o.Code == dto.OtpCode &&
+//                !o.IsUsed &&
+//                o.ExpiresAt > DateTime.UtcNow)
+//            .FirstOrDefaultAsync();
+
+//        if (otp == null)
+//            return ApiResponse<string>.Fail(
+//                "رمز التحقق غير صحيح أو منتهي الصلاحية");
+
+//        return ApiResponse<string>.Ok(
+//            "تم التحقق بنجاح",
+//            "رمز التحقق صحيح، يمكنك الآن تعيين كلمة مرور جديدة");
+//    }
+
+//    // ── Reset Password ────────────────────────────────────
+//    public async Task<ApiResponse<string>> ResetPasswordAsync(
+//        ResetPasswordDto dto)
+//    {
+//        if (dto.NewPassword != dto.ConfirmPassword)
+//            return ApiResponse<string>.Fail(
+//                "كلمة المرور وتأكيدها غير متطابقتين");
+
+//        var otp = await _db.OtpTokens
+//            .Where(o =>
+//                o.EmailOrPhone == dto.EmailOrPhone &&
+//                o.Code == dto.OtpCode &&
+//                !o.IsUsed &&
+//                o.ExpiresAt > DateTime.UtcNow)
+//            .FirstOrDefaultAsync();
+
+//        if (otp == null)
+//            return ApiResponse<string>.Fail(
+//                "رمز التحقق غير صحيح أو منتهي الصلاحية");
+
+//        var user = await _db.Users.FirstOrDefaultAsync(u =>
+//            u.Email.ToLower() == dto.EmailOrPhone.ToLower() ||
+//            u.PhoneNumber == dto.EmailOrPhone);
+
+//        if (user == null)
+//            return ApiResponse<string>.Fail("المستخدم غير موجود");
+
+//        // تحديث كلمة المرور
+//        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(
+//            dto.NewPassword);
+//        user.UpdatedAt = DateTime.UtcNow;
+
+//        // تعليم الـ OTP كمستخدم
+//        otp.IsUsed = true;
+
+//        await _db.SaveChangesAsync();
+
+//        return ApiResponse<string>.Ok(
+//            "تم تغيير كلمة المرور بنجاح",
+//            "يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة");
+//    }
+
+//    // ── Change Password (للمستخدم المسجّل دخوله) ──────────
+//    public async Task<ApiResponse<string>> ChangePasswordAsync(
+//        int userId, ChangePasswordDto dto)
+//    {
+//        if (dto.NewPassword != dto.ConfirmPassword)
+//            return ApiResponse<string>.Fail(
+//                "كلمة المرور الجديدة وتأكيدها غير متطابقتين");
+
+//        var user = await _db.Users.FindAsync(userId);
+//        if (user == null)
+//            return ApiResponse<string>.Fail("المستخدم غير موجود");
+
+//        if (!BCrypt.Net.BCrypt.Verify(
+//            dto.CurrentPassword, user.PasswordHash))
+//            return ApiResponse<string>.Fail(
+//                "كلمة المرور الحالية غير صحيحة");
+
+//        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(
+//            dto.NewPassword);
+//        user.UpdatedAt = DateTime.UtcNow;
+
+//        await _db.SaveChangesAsync();
+
+//        return ApiResponse<string>.Ok(
+//            "تم تغيير كلمة المرور بنجاح");
+//    }
+//}
+
+

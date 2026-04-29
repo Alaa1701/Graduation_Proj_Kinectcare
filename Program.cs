@@ -89,6 +89,21 @@ builder.Services.AddHttpContextAccessor();
 // ── Services ──────────────────────────────────────────────
 builder.Services.AddScoped<JwtHelper>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IEmailService, EmailService>(); 
+
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IChildService, ChildService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+
+builder.Services.AddScoped<FileStorageService>();
+builder.Services.AddScoped<ISessionService, SessionService>();
+builder.Services.AddScoped<AIBridgeService>();
+
+builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<IRehabPlanService, RehabPlanService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+
+builder.Services.AddScoped<PdfService>();
 
 var app = builder.Build();
 

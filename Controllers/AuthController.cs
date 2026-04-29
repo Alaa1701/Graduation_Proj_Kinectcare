@@ -67,11 +67,11 @@ public class AuthController : ControllerBase
     }
     
     
-    [HttpGet("generate-hash")]
-    public IActionResult GenerateHash([FromQuery] string password)
-    {
-        return Ok(BCrypt.Net.BCrypt.HashPassword(password));
-    }
+    //[HttpGet("generate-hash")]
+    //public IActionResult GenerateHash([FromQuery] string password)
+    //{
+    //    return Ok(BCrypt.Net.BCrypt.HashPassword(password));
+    //}
 
 
     // GET api/auth/me (بيانات المستخدم الحالي)

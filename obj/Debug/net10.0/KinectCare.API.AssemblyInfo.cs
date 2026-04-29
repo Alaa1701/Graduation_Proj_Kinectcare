@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("KinectCare.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+56d1b0a08fc37c3d95198608a652d3c9ec81ca9e")]
 [assembly: System.Reflection.AssemblyProductAttribute("KinectCare.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("KinectCare.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
