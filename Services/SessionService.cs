@@ -32,7 +32,7 @@ public class SessionService : ISessionService
         CreateSessionDto dto,
         IFormFile video)
     {
-        // تحقق أن الطفل مرتبط بهذا الأخصائي
+
         var child = await _db.Children.FirstOrDefaultAsync(c =>
             c.Id == dto.ChildId &&
             c.SpecialistId == specialistId);

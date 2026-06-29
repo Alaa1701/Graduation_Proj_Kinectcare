@@ -8,6 +8,7 @@ using KinectCare.API.Services;
 using KinectCare.API.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+//using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using System.Text;
@@ -60,20 +61,32 @@ builder.Services.AddHangfire(config => config
     .UseSimpleAssemblyNameTypeSerializer()
     .UseRecommendedSerializerSettings()
     .UseSqlServerStorage(builder.Configuration
-        .GetConnectionString("DefaultConnection")));
+        .GetConnectionString("DefaultConnection"),
+        new SqlServerStorageOptions
+        {
+            CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+            SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+            QueuePollInterval = TimeSpan.Zero,
+            UseRecommendedIsolationLevel = true,
+            DisableGlobalLocks = true,
+            TryAutoDetectSchemaDependentOptions = false
+        }
+        ));
 builder.Services.AddHangfireServer();
 
 // ── SignalR ───────────────────────────────────────────────
 builder.Services.AddSignalR();
 
-// ── AutoMapper ────────────────────────────────────────────
-builder.Services.AddAutoMapper(typeof(Program));
 
 // ── CORS ──────────────────────────────────────────────────
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins(
+            "http://localhost:5173",
+            "http://localhost:5174",
+            "https://taheel.runasp.net"
+        )
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials());
@@ -107,17 +120,12 @@ builder.Services.AddScoped<PdfService>();
 
 var app = builder.Build();
 
-// ── Middleware Pipeline ───────────────────────────────────
-if (app.Environment.IsDevelopment())
+app.MapOpenApi();
+app.MapScalarApiReference(options =>
 {
-    app.MapOpenApi();
-    // Scalar UI بدلاً من Swagger UI — أجمل وأحدث
-    app.MapScalarApiReference(options =>
-    {
-        options.Title = "KinectCare API";
-        options.Theme = ScalarTheme.Purple;
-    });
-}
+    options.Title = "KinectCare API";
+    options.Theme = ScalarTheme.Purple;
+});
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
 app.UseStaticFiles();
@@ -129,10 +137,24 @@ app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
 
 // ── تأكد أن قاعدة البيانات موجودة ─────────────────────────
+//using (var scope = app.Services.CreateScope())
+//{
+//    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+//    db.Database.Migrate();
+//}
+
+
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Migration failed");
+    }
 }
-
 app.Run();

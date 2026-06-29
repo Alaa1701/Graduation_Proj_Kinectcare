@@ -226,6 +226,21 @@ public class UserService : IUserService
             "تم تحديث الصلاحيات بنجاح");
     }
 
+    public async Task<ApiResponse<UserDto>> UpdateMyProfileAsync(
+    int userId, UpdateUserDto dto)
+    {
+        var user = await _db.Users.FindAsync(userId);
+        if (user == null)
+            return ApiResponse<UserDto>.Fail("المستخدم غير موجود");
+
+        user.FullName = dto.FullName;
+        user.PhoneNumber = dto.PhoneNumber;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return ApiResponse<UserDto>.Ok(ToDto(user), "تم تحديث البيانات بنجاح");
+    }
+
     // ── Helper ────────────────────────────────────────────
     private static UserDto ToDto(User u) => new()
     {

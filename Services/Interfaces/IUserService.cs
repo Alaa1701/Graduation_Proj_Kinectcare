@@ -22,4 +22,6 @@ public interface IUserService
         CreateParentDto dto);
     Task<ApiResponse<string>> UpdatePermissionsAsync(
         int parentId, UpdatePermissionsDto dto);
+
+    Task<ApiResponse<UserDto>> UpdateMyProfileAsync(int userId, UpdateUserDto dto);
 }

@@ -77,20 +77,19 @@ public class AuthService : IAuthService
         {
             EmailOrPhone = dto.EmailOrPhone,
             Code = code,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(10),
+            ExpiresAt = DateTime.UtcNow.AddMinutes(5),
             CreatedAt = DateTime.UtcNow
         };
 
         _db.OtpTokens.Add(otp);
         await _db.SaveChangesAsync();
 
-        // ✅ إرسال حقيقي الآن
-        // تحديد البريد الإلكتروني
+
         var isEmail = dto.EmailOrPhone.Contains('@');
 
         if (isEmail)
         {
-            // إرسال عبر Email
+
             try
             {
                 await _emailService.SendOtpEmailAsync(
@@ -107,13 +106,12 @@ public class AuthService : IAuthService
         }
         else
         {
-            // رقم هاتف — للتطوير: نسجّل الكود في الـ Log
-            // في الإنتاج: أضف Twilio هنا
+            
             _logger.LogWarning(
                 "SMS not configured. OTP for {Phone}: {Code}",
                 dto.EmailOrPhone, code);
 
-            // ✅ مؤقتاً: أرجع الكود في الرسالة للتطوير
+
             return ApiResponse<string>.Ok(
                 dto.EmailOrPhone,
                 $"[DEV] رمز التحقق هو: {code} " +
@@ -125,7 +123,7 @@ public class AuthService : IAuthService
             "تم إرسال رمز التحقق إلى بريدك الإلكتروني");
     }
 
-    // باقي الدوال بدون تغيير...
+
     public async Task<ApiResponse<string>> VerifyOtpAsync(
         VerifyOtpDto dto)
     {
@@ -211,6 +209,51 @@ public class AuthService : IAuthService
             "تم تغيير كلمة المرور بنجاح");
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // ── Forgot Password ───────────────────────────────────
 //    public async Task<ApiResponse<string>> ForgotPasswordAsync(

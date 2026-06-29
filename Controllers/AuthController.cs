@@ -3,7 +3,7 @@ using KinectCare.API.DTOs.Auth;
 using KinectCare.API.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-
+using KinectCare.API.DTOs.Users;
 namespace KinectCare.API.Controllers;
 
 [ApiController]
@@ -65,8 +65,8 @@ public class AuthController : ControllerBase
             .ChangePasswordAsync(userId, dto);
         return result.Success ? Ok(result) : BadRequest(result);
     }
-    
-    
+
+
     //[HttpGet("generate-hash")]
     //public IActionResult GenerateHash([FromQuery] string password)
     //{
@@ -87,5 +87,18 @@ public class AuthController : ControllerBase
             FullName = User.FindFirstValue(ClaimTypes.Name),
             Role = User.FindFirstValue(ClaimTypes.Role)
         });
+    }
+
+    // PUT api/auth/profile — أي مستخدم يعدّل بياناته بنفسه
+    [HttpPut("profile")]
+    [Authorize]
+    public async Task<IActionResult> UpdateMyProfile(
+        [FromBody] UpdateUserDto dto,
+        [FromServices] IUserService userService)
+    {
+        var userId = int.Parse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var result = await userService.UpdateMyProfileAsync(userId, dto);
+        return result.Success ? Ok(result) : BadRequest(result);
     }
 }
